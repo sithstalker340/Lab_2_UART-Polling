@@ -84,7 +84,7 @@ void init_uart()
     // that GPIO 14 is TXD, GPIO 15 is RXD, and they must be set
     // to use alternate function 0 in select register 1.
     // The bits must be set to 100 for GPIO 15 and 14.
-    gpio[GPFSEL1] |= 0x440000;
+    gpio[GPFSEL1] |= 0x24000;
 
     // According to the BCM2835 manual page 185, we
     // need to do the following to enable UART.
@@ -141,7 +141,7 @@ void init_uart()
 	*/
 	
     //Enable FIFOs and set word length by shifting in '1's
-    uart[UART0_LCRH] |= (1<<4)| (1<<5)|(1<<6);//(4 |(1 << 6));//It says 6:5 1<<4 3<<4
+    uart[UART0_LCRH] |= (1 << 4) | (1 << 5) | (1 << 6);
 
     // Mask all interrupts
     uart[UART0_IMSC] |= (

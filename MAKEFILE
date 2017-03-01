@@ -9,7 +9,7 @@
 
 # Replace with the path to your yagarto install directory.
 # Note: Any paths with spaces in it must have quotes around them, like below:
-PREFIX ?= "C:/yagarto-20121222"
+PREFIX ?= C:/yagarto-20121222
 # PREFIX ?= "/C/Linaro/gcc-linaro-5.3-2016.02-i686-mingw32_arm-eabi"
 ARMGNU ?= $(PREFIX)/bin/arm-none-eabi
 
