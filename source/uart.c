@@ -16,7 +16,7 @@
 #define RX_FIFO_FULL (1 << 6)
 
 // Tx FIFO empty
-#define TX_FIFO_EMPTY (1<< 7)
+#define TX_FIFO_EMPTY (1 << 7)
 
 /* <<PRELAB - COMPLETE THE FOLLOWING POLLING FUNCTIONS BASED ON 
 /	THE DESCRIPTIONS GIVEN. REFER TO THE BCM2835 MANUAL.>>
@@ -26,7 +26,7 @@
 void wait_for_tx_slot()
 {
     // Spin while the Tx FIFO is full
-    while (((volatile uint32_t)uart[UART0_FR]) & <<PRELAB - MISSING #DEF>>)
+    while (((volatile uint32_t)uart[UART0_FR]) & TX_FIFO_FULL)
 	{
 		// NOOP
 	}
@@ -36,7 +36,7 @@ void wait_for_tx_slot()
 void wait_for_uart_idle()
 {
     //Spin while the UART is busy transmitting
-    while (((volatile uint32_t)uart[UART0_FR]) & <<PRELAB - MISSING #DEF>>)
+    while (((volatile uint32_t)uart[UART0_FR]) & UART_BUSY_TX)
 	{
 		//NOOP
 	}
@@ -46,7 +46,7 @@ void wait_for_uart_idle()
 void wait_for_rx_slot()
 {
     // Spin while the Rx FIFO is full
-    while (((volatile uint32_t)uart[UART0_FR]) & <<PRELAB - MISSING #DEF>>)
+    while (((volatile uint32_t)uart[UART0_FR]) & RX_FIFO_FULL)
 	{
 		//NOOP
 	}
@@ -56,7 +56,7 @@ void wait_for_rx_slot()
 void wait_for_rx_has_char()
 {
     // Spin while the Rx FIFO is empty
-    while (((volatile uint32_t)uart[UART0_FR]) & <<PRELAB - MISSING #DEF>>)
+    while (((volatile uint32_t)uart[UART0_FR]) & RX_FIFO_EMPTY)
 	{
 		//NOOP
 	}
@@ -84,7 +84,7 @@ void init_uart()
     // that GPIO 14 is TXD, GPIO 15 is RXD, and they must be set
     // to use alternate function 0 in select register 1.
     // The bits must be set to 100 for GPIO 15 and 14.
-    gpio[GPFSEL1] |= 0x<<PRELAB - FILL IN THE HEX>>;
+    gpio[GPFSEL1] |= 0x440000;
 
     // According to the BCM2835 manual page 185, we
     // need to do the following to enable UART.
@@ -130,8 +130,8 @@ void init_uart()
     // 48000000 / (16 * 115200), which is 26.0416, or about 26.
     // The fractional part of the register is 0.0416
     // So FBRD = 0.0416 * 64 + 0.5 which is 1.3312, or ~1.
-    uart[UART0_IBRD] = <<PRELAB - PROVIDE THE CORRECT INTEGER>>;
-    uart[UART0_FBRD] = <<PRELAB - PROVIDE THE CORRECT INTEGER>>;
+    uart[UART0_IBRD] = 26;
+    uart[UART0_FBRD] = 1;
     // For 9600 baud - stability check - use this for debugging purposes
     //uart[UART0_IBRD] = 312;
     //uart[UART0_FBRD] = 32;
@@ -141,8 +141,7 @@ void init_uart()
 	*/
 	
     //Enable FIFOs and set word length by shifting in '1's
-    uart[UART0_LCRH] |= (<<PRELAB - ENABLE TX/RX FIFOS>>) |
-									(<<PRELAB - SET WORD LENGTH>>);
+    uart[UART0_LCRH] |= (1<<4)| (1<<5)|(1<<6);//(4 |(1 << 6));//It says 6:5 1<<4 3<<4
 
     // Mask all interrupts
     uart[UART0_IMSC] |= (
@@ -157,35 +156,33 @@ void init_uart()
 	*/
 	
     // Enable Receive, Enable Tx, Enable UART.
-    uart[UART0_CR] |= ((<<PRELAB - RX ENABLE>>) | 
-									(<<PRELAB - TX ENABLE>>) | 
-									(<<PRELAB - UART ENABLE>>));
+    uart[UART0_CR] |= ((1 << 9) | (1 << 8) | (1 << 0));
 }
 
 /// Gets a single character from the UART port.
 extern char get_char()
 {
-	// <<Insert polling function here>>
-	
+	wait_for_rx_has_char();
 
 	// Do not remove!!! The RPi UART is a bit... lazy... 
     delay(150);
 	
 	// Read the data register.
     // Only care about the least significant 8 bits, so mask off others.
-    return (char)(uart[UART0_DR] <<APPLY BITWISE MASK HERE>>);
+    return (char)(uart[UART0_DR] & 0xFF);
 }
 
 /// Writes a single character to the uart port.
 extern void put_char(char c)
 {
-	// <<Insert polling function here>>
-	
+	//Waits for Tx FIFO to have space.
+	wait_for_tx_slot();
 	
 	// Do not remove!!! The RPi UART is a bit... lazy... 
     delay(150);
 	
-	// <<Write the character to the data register here.>>
+	//Write the character to the data register here.
+	uart[UART0_DR] = c;
 	
 }
 
@@ -204,15 +201,19 @@ extern size_t get_string(char* buffer, size_t buffer_size)
         (count < (buffer_size - 1)) && (ch != '\n') && (ch != '\r');
     )
     {
-        // <<GET THE CHAR HERE>>
-		
+        //GET THE CHAR HERE
+		ch = get_char();
 
         if ((ch != '\n') && (ch != '\r'))
         {
-            // <<ECHO THE CHAR HERE>>
-            
-			// <<ADD TO BUFFER AND INCREMENT THE BUFFER COUNT>>
+            //ECHO THE CHAR HERE
+            put_char(ch);
 			
+			//ADD TO BUFFER
+			buffer[count] = ch;
+			
+			//AND INCREMENT THE BUFFER COUNT
+			count++;			
         }
         // OS dependent.  May get \r, may get \n.  Either way, we'll
         // want to break out of the loop, and echo back new line (\r\n).
@@ -240,15 +241,17 @@ extern void put_string(const char* str)
     char currentChar = str[0];
     for (size_t i = 0; currentChar != '\0'; ++i)
     {
-        // << SET CURRENT CHARACTER >>
-
+        //SET CURRENT CHARACTER
+		currentChar = str[i];
+		
         // Depending on which console is being used, this may
         // or may not be needed.  On linux, we've discovered we can't
         // send null characters or the formatting is all wrong.
         if(currentChar!= '\0')
         {
-            // << PRINT OUT THE CURRENT CHARACTER >>
+            //PRINT OUT THE CURRENT CHARACTER
+			put_char(currentChar);
         }
     }
-    // << INSERT POLLING FUNCTION CALL HERE>>
+    wait_for_uart_idle();
 }
